@@ -11,7 +11,7 @@ This guide provides instructions for deploying the Smart-Watch application on a 
 
 1.  **Clone the repository:**
     ```bash
-    git clone <your-repo-url> smart-watch
+    git clone https://github.com/kalikaruto/smart-watch.git smart-watch
     cd smart-watch
     ```
 
