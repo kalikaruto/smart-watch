@@ -16,17 +16,31 @@ echo_yellow() {
 echo_red() {
     echo -e "\033[0;31m$1\033[0m"
 }
+# Install python if not installed
+if ! command -v python3 &> /dev/null; then
+    echo_yellow "Python3 is not installed. Installing Python3..."
+    sudo apt update
+    sudo apt install -y python3 python3-venv python3-pip
+    if [ $? -ne 0 ]; then
+        echo_red "Error: Failed to install Python3."
+        exit 1
+    fi
+fi
 
 # --- Installation Steps ---
 
 echo_green "Starting Smart-Watch Installation..."
 
 # 1. Create Python Virtual Environment
-echo_green "\n[1/5] Creating Python virtual environment..."
-python3 -m venv "$PROJECT_ROOT/.venv"
-if [ $? -ne 0 ]; then
-    echo_red "Error: Failed to create virtual environment."
-    exit 1
+echo_green "\n[1/5] Creating Python virtual environment($PROJECT_ROOT)..."
+if [ ! -d "$PROJECT_ROOT/.venv"]
+    python3 -m venv "$PROJECT_ROOT/.venv"
+    if [ $? -ne 0 ]; then
+        echo_red "Error: Failed to create virtual environment."
+        exit 1
+    fi
+else
+    echo "$PROJECT_ROOT/.venv/ already exists"
 fi
 
 # 2. Install Dependencies

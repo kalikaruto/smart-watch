@@ -4,6 +4,7 @@ import logging
 from logger import setup_logging
 from datetime import datetime
 import time
+import os
 
 class DetectionProcessor:
     """
@@ -18,6 +19,10 @@ class DetectionProcessor:
         self.last_alert_times = shared_last_alert_times
 
     def _load_model(self):
+        if not os.path.isfile(self.config['prototxt_path']):
+            raise FileNotFoundError(f"Prototxt file not found: {self.config['prototxt_path']}")
+        if not os.path.isfile(self.config['model_path']):
+            raise FileNotFoundError(f"Model file not found: {self.config['model_path']}")
         return cv2.dnn.readNetFromCaffe(self.config['prototxt_path'], self.config['model_path'])
 
     def process_frame(self, frame, camera_info):
