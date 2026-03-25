@@ -6,21 +6,25 @@ This guide provides instructions for deploying the Smart-Watch application on a 
 
 - A Raspberry Pi with Raspberry Pi OS (or any other Debian-based Linux distribution).
 - `git` and `python3` installed.
+- use `python13.3`
 
 ## Installation
 
 1.  **Clone the repository:**
+
     ```bash
     git clone https://github.com/kalikaruto/smart-watch.git smart-watch
     cd smart-watch
     ```
 
 2.  **Make the installation script executable:**
+
     ```bash
     chmod +x v2/deployment/install.sh
     ```
 
 3.  **Run the installation script:**
+
     ```bash
     ./v2/deployment/install.sh
     ```
@@ -36,16 +40,19 @@ This guide provides instructions for deploying the Smart-Watch application on a 
 Once installed, you can manage the Smart-Watch service using the following commands:
 
 - **Start the service:**
+
   ```bash
   sudo systemctl start smart-watch
   ```
 
 - **Stop the service:**
+
   ```bash
   sudo systemctl stop smart-watch
   ```
 
 - **Check the status and view logs:**
+
   ```bash
   sudo systemctl status smart-watch
   ```

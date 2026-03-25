@@ -7,6 +7,9 @@ import threading
 import logging
 from logger import setup_logging
 from queue import Queue
+import smtplib
+from email.message import EmailMessage
+from datetime import datetime
 
 class NotificationManager:
     """
@@ -27,6 +30,7 @@ class NotificationManager:
             timestamp, camera_info, frame = task
             try:
                 self._send_telegram_alert(timestamp, camera_info, frame)
+                self._send_email_alert(timestamp, camera_info, frame)
             except Exception as e:
                 logging.error(f"Error sending notification: {e}")
             self.queue.task_done()
@@ -60,6 +64,46 @@ class NotificationManager:
         finally:
             if os.path.exists(temp_image_path):
                 os.remove(temp_image_path)
+
+    def _send_email_alert(self, timestamp, camera_info, frame):
+        sender = self.config.get("sender_email")
+        receiver = self.config.get("receiver_email")
+        password = self.config.get("sender_pass")
+
+        if not sender or not receiver or not password:
+            logging.warning("Email config missing: sender_email/receiver_email/sender_pass")
+            return
+
+        cam_name = camera_info.get("name", "N/A")
+        cam_link = camera_info.get("link", "N/A")
+        body = (
+            f"Trespassing detected at {timestamp}\n"
+            f"Camera: {cam_name}\n"
+            f"Link: {cam_link}\n"
+        )
+
+        image_ok, encoded = cv2.imencode(".jpg", frame)
+        if not image_ok:
+            logging.error("Failed to encode frame for email attachment.")
+            return
+
+        msg = EmailMessage()
+        msg["Subject"] = f"[Smart Watch] Trespass alert - {cam_name}"
+        msg["From"] = sender
+        msg["To"] = receiver
+        msg.set_content(body)
+        msg.add_attachment(
+            encoded.tobytes(),
+            maintype="image",
+            subtype="jpeg",
+            filename=f"alert_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+        )
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(sender, password)
+            smtp.send_message(msg)
+
+        logging.info(f"Email alert sent for {cam_name}")
 
     def start(self):
         self.running = True

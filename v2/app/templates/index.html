@@ -1,0 +1,340 @@
+<!-- templates/index.html -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Smart Watch Camera Manager</title>
+    <style>
+      /* static/styles.css */
+      :root {
+        --bg: #f2f4f7;
+        --card: #ffffff;
+        --text: #11212d;
+        --muted: #5b6770;
+        --primary: #0f766e;
+        --danger: #b42318;
+        --border: #d0d7de;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+        background: linear-gradient(160deg, #eef2f7, #f8fafc);
+        color: var(--text);
+      }
+
+      .container {
+        width: min(960px, 92%);
+        margin: 2rem auto 3rem;
+        display: grid;
+        gap: 1rem;
+      }
+
+      .hero {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1.2rem 1rem;
+      }
+
+      .hero h1 {
+        margin: 0 0 0.2rem;
+        font-size: 1.8rem;
+      }
+
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1rem;
+      }
+
+      label {
+        display: block;
+        margin: 0.65rem 0 0.25rem;
+        font-weight: 600;
+      }
+
+      input {
+        width: 100%;
+        padding: 0.62rem 0.7rem;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font-size: 0.96rem;
+      }
+
+      .actions {
+        margin-top: 0.9rem;
+        display: flex;
+        gap: 0.6rem;
+      }
+
+      .btn {
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--text);
+        border-radius: 10px;
+        padding: 0.5rem 0.9rem;
+        cursor: pointer;
+      }
+
+      .btn.primary {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+      }
+
+      .btn.danger {
+        background: #fff;
+        color: var(--danger);
+        border-color: #f4c7c3;
+      }
+
+      .list-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .camera-list {
+        list-style: none;
+        margin: 0.8rem 0 0;
+        padding: 0;
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .camera-item {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 0.75rem;
+        display: grid;
+        gap: 0.45rem;
+      }
+
+      .camera-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.6rem;
+      }
+
+      .camera-name {
+        font-weight: 700;
+      }
+
+      .camera-link,
+      .camera-desc {
+        color: var(--muted);
+        font-size: 0.93rem;
+        word-break: break-all;
+      }
+
+      .camera-actions {
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .error {
+        color: var(--danger);
+        min-height: 1.2rem;
+        margin: 0.5rem 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <header class="hero">
+        <h1>Camera Manager</h1>
+        <p>Manage camera sources used by your detection service.</p>
+      </header>
+
+      <section class="panel">
+        <h2 id="form-title">Add Camera</h2>
+        <form id="camera-form">
+          <input type="hidden" id="camera-id" />
+          <label>Name</label>
+          <input id="name" required />
+
+          <label>Link</label>
+          <input id="link" required />
+
+          <label>Description</label>
+          <input id="desc" required />
+
+          <div class="actions">
+            <button type="submit" class="btn primary">Save</button>
+            <button type="button" id="cancel-edit" class="btn" hidden>
+              Cancel Edit
+            </button>
+          </div>
+        </form>
+        <p id="form-error" class="error"></p>
+      </section>
+
+      <section class="panel">
+        <div class="list-head">
+          <h2>Cameras</h2>
+          <button id="refresh-btn" class="btn">Refresh</button>
+        </div>
+        <p id="list-error" class="error"></p>
+        <ul id="camera-list" class="camera-list"></ul>
+      </section>
+    </main>
+
+    <script>
+      // static/app.js
+      const form = document.getElementById("camera-form");
+      const formTitle = document.getElementById("form-title");
+      const cameraIdInput = document.getElementById("camera-id");
+      const nameInput = document.getElementById("name");
+      const linkInput = document.getElementById("link");
+      const descInput = document.getElementById("desc");
+      const cancelEditBtn = document.getElementById("cancel-edit");
+      const refreshBtn = document.getElementById("refresh-btn");
+      const cameraList = document.getElementById("camera-list");
+      const formError = document.getElementById("form-error");
+      const listError = document.getElementById("list-error");
+
+      function resetForm() {
+        cameraIdInput.value = "";
+        formTitle.textContent = "Add Camera";
+        cancelEditBtn.hidden = true;
+        form.reset();
+        formError.textContent = "";
+      }
+
+      function startEdit(camera) {
+        cameraIdInput.value = camera.id;
+        nameInput.value = camera.name;
+        linkInput.value = camera.link;
+        descInput.value = camera.desc;
+        formTitle.textContent = `Edit Camera #${camera.id}`;
+        cancelEditBtn.hidden = false;
+        formError.textContent = "";
+      }
+
+      async function fetchCameras() {
+        listError.textContent = "";
+        try {
+          const res = await fetch("/api/cameras");
+          if (!res.ok) throw new Error("Failed to load cameras");
+          const data = await res.json();
+          renderCameraList(data);
+        } catch (err) {
+          listError.textContent = err.message;
+        }
+      }
+
+      function renderCameraList(cameras) {
+        cameraList.innerHTML = "";
+        if (!cameras.length) {
+          const li = document.createElement("li");
+          li.className = "camera-item";
+          li.textContent = "No cameras configured.";
+          cameraList.appendChild(li);
+          return;
+        }
+
+        cameras.forEach((cam) => {
+          const li = document.createElement("li");
+          li.className = "camera-item";
+          li.innerHTML = `
+      <div class="camera-top">
+        <span class="camera-name">${cam.name}</span>
+        <span>#${cam.id}</span>
+      </div>
+      <div class="camera-link">${cam.link}</div>
+      <div class="camera-desc">${cam.desc}</div>
+      <div class="camera-actions">
+        <button class="btn edit-btn">Edit</button>
+        <button class="btn danger delete-btn">Delete</button>
+      </div>
+    `;
+
+          li.querySelector(".edit-btn").addEventListener("click", () =>
+            startEdit(cam),
+          );
+          li.querySelector(".delete-btn").addEventListener("click", () =>
+            deleteCamera(cam.id),
+          );
+
+          cameraList.appendChild(li);
+        });
+      }
+
+      async function deleteCamera(id) {
+        listError.textContent = "";
+        const ok = window.confirm("Delete this camera?");
+        if (!ok) return;
+
+        try {
+          const res = await fetch(`/api/cameras/${id}`, { method: "DELETE" });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error || "Delete failed");
+          }
+          await fetchCameras();
+          if (cameraIdInput.value === String(id)) resetForm();
+        } catch (err) {
+          listError.textContent = err.message;
+        }
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        formError.textContent = "";
+
+        const payload = {
+          name: nameInput.value.trim(),
+          link: linkInput.value.trim(),
+          desc: descInput.value.trim(),
+        };
+
+        if (!payload.name || !payload.link || !payload.desc) {
+          formError.textContent = "All fields are required.";
+          return;
+        }
+
+        const editing = cameraIdInput.value !== "";
+        const url = editing
+          ? `/api/cameras/${cameraIdInput.value}`
+          : "/api/cameras";
+        const method = editing ? "PUT" : "POST";
+
+        try {
+          const res = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error || "Save failed");
+          }
+
+          resetForm();
+          await fetchCameras();
+        } catch (err) {
+          formError.textContent = err.message;
+        }
+      });
+
+      cancelEditBtn.addEventListener("click", resetForm);
+      refreshBtn.addEventListener("click", fetchCameras);
+
+      fetchCameras();
+    </script>
+  </body>
+</html>

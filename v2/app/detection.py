@@ -35,7 +35,7 @@ class DetectionProcessor:
                 if self._should_send_alert(cam_name):
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     logging.info(f"Sending alert for {cam_name} at {timestamp}")
-                    # self.notification_manager.queue_notification(timestamp, camera_info, frame)
+                    self.notification_manager.queue_notification(timestamp, camera_info, frame)
                     self.last_alert_times[cam_name] = time.time()
 
     def _detect_motion(self, frame):
