@@ -48,7 +48,12 @@ def main(show_frames=False):
     notification_queue = manager.Queue()
 
     # Start video streams
-    streams = [VideoStream(cam) for cam in cameras]
+    stream_retries = max(1, int(config.get('camera_max_retries', 3)))
+    stream_retry_delay = max(0.1, float(config.get('camera_retry_delay', 1)))
+    streams = [
+        VideoStream(cam, max_retries=stream_retries, retry_delay=stream_retry_delay)
+        for cam in cameras
+    ]
     for stream in streams:
         stream.start()
 
@@ -56,10 +61,15 @@ def main(show_frames=False):
     shared_last_alert_times = manager.dict()
 
     # Start detection process pool
-    num_processes = max(1, cv2.getNumberOfCPUs() - 1) # Leave one CPU for other tasks
+    cpu_based_workers = max(1, cv2.getNumberOfCPUs() - 1) # Leave one CPU for other tasks
+    configured_max_workers = int(config.get('max_workers', cpu_based_workers))
+    num_processes = max(1, min(cpu_based_workers, configured_max_workers))
     pool = Pool(num_processes, detection_worker, (config, notification_queue, frame_queue, shared_last_alert_times))
 
-    logging.info(f"Starting detection with {num_processes} worker processes.")
+    logging.info(
+        f"Starting detection with {num_processes} worker processes "
+        f"(cpu_limit={cpu_based_workers}, configured_max={configured_max_workers})."
+    )
 
     latest_frames = {cam.get('name'): None for cam in cameras}
 
