@@ -1,6 +1,0 @@
-npyscreen==4.10.5
-numpy==2.2.5
-opencv_python==4.11.0.86
-python-dotenv==1.1.0
-selenium==4.31.0
-selenium_stealth==1.0.6

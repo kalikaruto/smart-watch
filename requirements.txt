@@ -1,0 +1,7 @@
+npyscreen==4.10.5
+numpy
+opencv-python
+python-dotenv
+python-telegram-bot
+coloredlogs
+flask

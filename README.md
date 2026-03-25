@@ -7,6 +7,7 @@ This guide provides instructions for deploying the Smart-Watch application on a 
 - A Raspberry Pi with Raspberry Pi OS (or any other Debian-based Linux distribution).
 - `git` and `python3` installed.
 - use `python13.3`
+- `python3.13 -m venv .venv`
 
 ## Installation
 
