@@ -150,6 +150,44 @@
         min-height: 1.2rem;
         margin: 0.5rem 0 0;
       }
+
+      .service-status {
+        margin: 0.2rem 0 0.8rem;
+        color: var(--muted);
+      }
+
+      .service-status strong {
+        color: var(--text);
+      }
+
+      .service-actions {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+
+      .logs {
+        margin-top: 0.8rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #0d1117;
+        color: #d7e0ea;
+        padding: 0.75rem;
+        min-height: 220px;
+        max-height: 320px;
+        overflow: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 640px) {
+        .camera-top {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
     </style>
   </head>
   <body>
@@ -158,6 +196,20 @@
         <h1>Camera Manager</h1>
         <p>Manage camera sources used by your detection service.</p>
       </header>
+
+      <section class="panel">
+        <h2>Detection Service</h2>
+        <p class="service-status">
+          Status: <strong id="service-status-text">Unknown</strong>
+        </p>
+        <div class="service-actions">
+          <button id="service-start-btn" class="btn primary">Start Main</button>
+          <button id="service-stop-btn" class="btn danger">Stop Main</button>
+          <button id="service-refresh-btn" class="btn">Refresh Status</button>
+        </div>
+        <p id="service-error" class="error"></p>
+        <div id="service-logs" class="logs">No logs yet.</div>
+      </section>
 
       <section class="panel">
         <h2 id="form-title">Add Camera</h2>
@@ -205,6 +257,89 @@
       const cameraList = document.getElementById("camera-list");
       const formError = document.getElementById("form-error");
       const listError = document.getElementById("list-error");
+      const serviceStatusText = document.getElementById("service-status-text");
+      const serviceStartBtn = document.getElementById("service-start-btn");
+      const serviceStopBtn = document.getElementById("service-stop-btn");
+      const serviceRefreshBtn = document.getElementById("service-refresh-btn");
+      const serviceError = document.getElementById("service-error");
+      const serviceLogs = document.getElementById("service-logs");
+
+      function updateServiceStatus(status) {
+        if (!status) {
+          serviceStatusText.textContent = "Unknown";
+          serviceStartBtn.disabled = false;
+          serviceStopBtn.disabled = true;
+          return;
+        }
+
+        if (status.running) {
+          serviceStatusText.textContent = `Running (pid ${status.pid})`;
+          serviceStartBtn.disabled = true;
+          serviceStopBtn.disabled = false;
+        } else if (status.returncode === null || status.returncode === undefined) {
+          serviceStatusText.textContent = "Stopped";
+          serviceStartBtn.disabled = false;
+          serviceStopBtn.disabled = true;
+        } else {
+          serviceStatusText.textContent = `Stopped (exit ${status.returncode})`;
+          serviceStartBtn.disabled = false;
+          serviceStopBtn.disabled = true;
+        }
+      }
+
+      async function fetchServiceStatus() {
+        serviceError.textContent = "";
+        try {
+          const res = await fetch("/api/service/status");
+          if (!res.ok) throw new Error("Failed to load service status");
+          const data = await res.json();
+          updateServiceStatus(data);
+        } catch (err) {
+          serviceError.textContent = err.message;
+        }
+      }
+
+      async function fetchServiceLogs() {
+        try {
+          const res = await fetch("/api/service/logs?limit=300");
+          if (!res.ok) throw new Error("Failed to load logs");
+          const data = await res.json();
+          const logs = Array.isArray(data.logs) ? data.logs : [];
+          serviceLogs.textContent = logs.length
+            ? logs.join("\n")
+            : "No logs yet.";
+          serviceLogs.scrollTop = serviceLogs.scrollHeight;
+          updateServiceStatus(data.status);
+        } catch (_err) {
+          // Keep polling even if a fetch fails intermittently.
+        }
+      }
+
+      async function startService() {
+        serviceError.textContent = "";
+        try {
+          const res = await fetch("/api/service/start", { method: "POST" });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(body.error || "Failed to start service");
+          updateServiceStatus(body.status);
+          await fetchServiceLogs();
+        } catch (err) {
+          serviceError.textContent = err.message;
+        }
+      }
+
+      async function stopService() {
+        serviceError.textContent = "";
+        try {
+          const res = await fetch("/api/service/stop", { method: "POST" });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(body.error || "Failed to stop service");
+          updateServiceStatus(body.status);
+          await fetchServiceLogs();
+        } catch (err) {
+          serviceError.textContent = err.message;
+        }
+      }
 
       function resetForm() {
         cameraIdInput.value = "";
@@ -333,8 +468,18 @@
 
       cancelEditBtn.addEventListener("click", resetForm);
       refreshBtn.addEventListener("click", fetchCameras);
+      serviceStartBtn.addEventListener("click", startService);
+      serviceStopBtn.addEventListener("click", stopService);
+      serviceRefreshBtn.addEventListener("click", async () => {
+        await fetchServiceStatus();
+        await fetchServiceLogs();
+      });
 
       fetchCameras();
+      fetchServiceStatus();
+      fetchServiceLogs();
+      setInterval(fetchServiceStatus, 5000);
+      setInterval(fetchServiceLogs, 2000);
     </script>
   </body>
 </html>

@@ -1,10 +1,111 @@
 # api.py
+import os
+import sys
+import subprocess
+import threading
+from collections import deque
+from pathlib import Path
+
 from flask import Flask, jsonify, render_template, request
 from config import load_cameras, save_cameras
 
 app = Flask(__name__)
 
 REQUIRED_FIELDS = ("name", "link", "desc")
+
+BASE_DIR = Path(__file__).resolve().parent
+LOG_BUFFER = deque(maxlen=1000)
+PROCESS_LOCK = threading.Lock()
+MAIN_PROCESS = None
+LOG_THREAD = None
+
+
+def _append_log(line):
+    if line is None:
+        return
+    cleaned = line.rstrip("\n")
+    if cleaned:
+        LOG_BUFFER.append(cleaned)
+
+
+def _drain_process_output(process):
+    try:
+        if process.stdout is None:
+            return
+        for line in process.stdout:
+            _append_log(line)
+    finally:
+        return_code = process.poll()
+        _append_log(f"[service] process exited with code {return_code}")
+
+
+def _is_process_running(process):
+    return process is not None and process.poll() is None
+
+
+def get_service_status_payload():
+    running = _is_process_running(MAIN_PROCESS)
+    return {
+        "running": running,
+        "pid": MAIN_PROCESS.pid if running else None,
+        "returncode": None if running or MAIN_PROCESS is None else MAIN_PROCESS.poll(),
+    }
+
+
+def start_main_service():
+    global MAIN_PROCESS, LOG_THREAD
+
+    with PROCESS_LOCK:
+        if _is_process_running(MAIN_PROCESS):
+            return False, "Service is already running"
+
+        command = [sys.executable, str(BASE_DIR / "main.py")]
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+
+        process = subprocess.Popen(
+            command,
+            cwd=str(BASE_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=env,
+        )
+
+        MAIN_PROCESS = process
+        LOG_BUFFER.clear()
+        _append_log(f"[service] started main.py (pid={process.pid})")
+
+        LOG_THREAD = threading.Thread(
+            target=_drain_process_output,
+            args=(process,),
+            daemon=True,
+        )
+        LOG_THREAD.start()
+
+    return True, None
+
+
+def stop_main_service():
+    global MAIN_PROCESS
+
+    with PROCESS_LOCK:
+        if not _is_process_running(MAIN_PROCESS):
+            return False, "Service is not running"
+
+        process = MAIN_PROCESS
+        _append_log("[service] stopping process...")
+        process.terminate()
+
+    try:
+        process.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        _append_log("[service] force killing process")
+        process.kill()
+        process.wait(timeout=3)
+
+    return True, None
 
 
 def read_cameras():
@@ -101,6 +202,39 @@ def delete_camera(camera_id):
     deleted = cameras.pop(camera_id)
     save_cameras(cameras)
     return jsonify({"message": "Camera deleted", "deleted": deleted}), 200
+
+
+@app.get("/api/service/status")
+def get_service_status():
+    return jsonify(get_service_status_payload()), 200
+
+
+@app.post("/api/service/start")
+def start_service():
+    started, error = start_main_service()
+    if not started:
+        return jsonify({"error": error, "status": get_service_status_payload()}), 409
+    return jsonify({"message": "Service started", "status": get_service_status_payload()}), 200
+
+
+@app.post("/api/service/stop")
+def stop_service():
+    stopped, error = stop_main_service()
+    if not stopped:
+        return jsonify({"error": error, "status": get_service_status_payload()}), 409
+    return jsonify({"message": "Service stopped", "status": get_service_status_payload()}), 200
+
+
+@app.get("/api/service/logs")
+def get_service_logs():
+    limit_raw = request.args.get("limit", "200")
+    try:
+        limit = max(1, min(int(limit_raw), 1000))
+    except ValueError:
+        limit = 200
+
+    logs = list(LOG_BUFFER)[-limit:]
+    return jsonify({"logs": logs, "status": get_service_status_payload()}), 200
 
 
 if __name__ == "__main__":
