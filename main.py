@@ -12,13 +12,13 @@ from notifications import NotificationManager
 from utils import arrange_frames
 from cli import CameraApp
 
-def detection_worker(config, notification_queue, frame_queue, shared_last_alert_times):
+def detection_worker(config, notification_queue, frame_queue, shared_last_alert_times, shared_presence_states):
     """Worker function for the detection process pool."""
     notification_manager = NotificationManager(config)
     notification_manager.queue = notification_queue
     notification_manager.start()
     
-    detector = DetectionProcessor(config, notification_manager, shared_last_alert_times)
+    detector = DetectionProcessor(config, notification_manager, shared_last_alert_times, shared_presence_states)
     
     while True:
         task = frame_queue.get()
@@ -59,12 +59,17 @@ def main(show_frames=False):
 
     # Create a shared dictionary for last alert times
     shared_last_alert_times = manager.dict()
+    shared_presence_states = manager.dict()
 
     # Start detection process pool
     cpu_based_workers = max(1, cv2.getNumberOfCPUs() - 1) # Leave one CPU for other tasks
     configured_max_workers = int(config.get('max_workers', cpu_based_workers))
     num_processes = max(1, min(cpu_based_workers, configured_max_workers))
-    pool = Pool(num_processes, detection_worker, (config, notification_queue, frame_queue, shared_last_alert_times))
+    pool = Pool(
+        num_processes,
+        detection_worker,
+        (config, notification_queue, frame_queue, shared_last_alert_times, shared_presence_states),
+    )
 
     logging.info(
         f"Starting detection with {num_processes} worker processes "

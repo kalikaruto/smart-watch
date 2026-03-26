@@ -10,13 +10,14 @@ class DetectionProcessor:
     """
     Handles motion and human detection in a separate process.
     """
-    def __init__(self, config, notification_manager, shared_last_alert_times):
+    def __init__(self, config, notification_manager, shared_last_alert_times, shared_presence_states):
         self.config = config
         self.notification_manager = notification_manager
         self.net = self._load_model()
         self.backSub = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=16, detectShadows=False)
         self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         self.last_alert_times = shared_last_alert_times
+        self.presence_states = shared_presence_states
 
     def _load_model(self):
         if not os.path.isfile(self.config['prototxt_path']):
@@ -28,15 +29,22 @@ class DetectionProcessor:
     def process_frame(self, frame, camera_info):
         """Process a single frame for motion and human detection."""
         cam_name = camera_info.get('name')
-        if self._detect_motion(frame):
-            logging.info(f"Motion detected in {cam_name}")
-            if self._detect_human(frame):
-                logging.info(f"Human detected in {cam_name}")
-                if self._should_send_alert(cam_name):
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    logging.info(f"Sending alert for {cam_name} at {timestamp}")
-                    self.notification_manager.queue_notification(timestamp, camera_info, frame)
-                    self.last_alert_times[cam_name] = time.time()
+        motion_detected = self._detect_motion(frame)
+        human_detected = motion_detected and self._detect_human(frame)
+
+        was_human_present = bool(self.presence_states.get(cam_name, False))
+        if human_detected and not was_human_present:
+            logging.info(f"Human detected in {cam_name}")
+        elif not human_detected and was_human_present:
+            logging.info(f"Human left frame in {cam_name}")
+
+        self.presence_states[cam_name] = human_detected
+
+        if human_detected and self._should_send_alert(cam_name):
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logging.info(f"Sending alert for {cam_name} at {timestamp}")
+            self.notification_manager.queue_notification(timestamp, camera_info, frame)
+            self.last_alert_times[cam_name] = time.time()
 
     def _detect_motion(self, frame):
         """Detects motion in a frame."""

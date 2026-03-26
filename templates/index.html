@@ -276,7 +276,10 @@
           serviceStatusText.textContent = `Running (pid ${status.pid})`;
           serviceStartBtn.disabled = true;
           serviceStopBtn.disabled = false;
-        } else if (status.returncode === null || status.returncode === undefined) {
+        } else if (
+          status.returncode === null ||
+          status.returncode === undefined
+        ) {
           serviceStatusText.textContent = "Stopped";
           serviceStartBtn.disabled = false;
           serviceStopBtn.disabled = true;
